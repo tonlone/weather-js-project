@@ -1,0 +1,41 @@
+<html>
+    <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="X-UA-Compatible" content="id=edge">
+            <link rel="stylesheet" href="./style.css">
+            <title>Weather</title>
+    </head>
+    <body>
+        <div class="location-section">
+            <h1 class="location-timezone"></h1>  
+            <canvas class="icon" width="128" height="128"></canvas>       
+        </div>
+        <div class="temperature-section">
+            <div class="degree-section">
+                <h2 class="temperature-degree">Loading ...</h2>
+                <span></span>
+            </div>
+            <div class="temperature-description"></div>
+            <div class="uvindex-section">
+                <a>UV Index: </a>
+                <div class="uv-index"></div>
+            </div>
+            <br/>
+            <div class="visibility-section">
+                <a>Visibility: </a>
+                <div class="visibility"></div>
+            </div>
+            <div class="humidity-section">
+                <a>Humidity: </a>
+                <div class="humidity"></div>
+            </div>
+            <!---
+            <div class="currentTime-section">
+                <a>Current Date and Time: </a>
+                <div class="dateAndTime"></div>
+            </div>-->
+        </div>
+        <script src="./skycons.js"></script>
+        <script src="./app.js"></script>
+    </body>
+</html>
