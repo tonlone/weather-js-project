@@ -21,15 +21,14 @@ window.addEventListener('load', ()=>{
         navigator.geolocation.getCurrentPosition(position => {
             const long = position.coords.longitude;
             const lat = position.coords.latitude;
-            const locale = navigator.language;
             // Get the user's weather using the OpenWeather API
-            setWeather(lat, long, locale);
+            setWeather(lat, long);
 
         });
 
     }
 
-    function setWeather(lat, long, locale) {
+    function setWeather(lat, long) {
         const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?key=52c5ddc336f14e3299d13034232603&q=${lat},${long}&days=5&aqi=no&alerts=yes`;
         fetch(weatherAPIURL)
             .then (response =>{
@@ -56,10 +55,10 @@ window.addEventListener('load', ()=>{
                 const sunsetTimeData = geolocationData.forecast.forecastday[0].astro.sunset;
 
                 const alertsData = geolocationData.alerts;
-                const timeZoneData = geolocationData.location.tz_id;
+                const currentTimeData = geolocationData.current.last_updated_epoch;
 
                 // Set Alert
-                setWarning(alertsData,timeZoneData, locale);
+                setWarning(alertsData,currentTimeData);
 
                 // Get the user's location using the Geolocation API
                 setLocation(lat, long, location, sunriseTimeData, sunsetTimeData);
@@ -255,7 +254,8 @@ window.addEventListener('load', ()=>{
         });
     }
 
-    function setWarning(alerts, timeZone, locale) {
+    function setWarning(alerts, currentTime) {
+        const warningToggleON = true;
         const listOfWarnings = alerts.alert;
         console.log("warnings",listOfWarnings);
 
@@ -271,11 +271,9 @@ window.addEventListener('load', ()=>{
             const originalMessage = warning.desc;
 
             // Convert GMT time to Date object
-            const expireDateGMT = new Date(expire);
-            // Convert GMT time to local time string
-            const localExpireDateString = expireDateGMT.toLocaleString(locale, { timeZone: timeZone });
-            const localExpireTime = new Date(localExpireDateString).getTime();
-            const currentTime = getCurrentDate().getTime();
+            const expireDateGMT = Date.parse(expire)/1000;
+            console.log("expireDateGMT", expireDateGMT);
+            console.log("currentTime", currentTime);
 
             if (source.toLowerCase() === "environment canada") {
                 const hazardRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
@@ -283,7 +281,7 @@ window.addEventListener('load', ()=>{
                 const hazardMsg = originalMessage.match(hazardRegex)[0];
                 const timingMsg = originalMessage.match(TimingRegex)[0];
 
-                if(localExpireTime < currentTime) {
+                if(expireDateGMT < currentTime) {
                     console.log("This warning is expired:", hazardMsg);
 
                     continue;
@@ -296,7 +294,7 @@ window.addEventListener('load', ()=>{
         }
         // Remove the last 2 endOfLine characters
         resultMsg = resultMsg.slice(0,-2);
-        if(showWarning) {
+        if(showWarning && warningToggleON) {
             warnMessage.innerHTML = resultMsg;
             warnMessage.style.display = 'block';
         }
