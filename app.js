@@ -272,8 +272,8 @@ window.addEventListener('load', ()=>{
 
             // Convert GMT time to Date object
             const expireDateGMT = Date.parse(expire)/1000;
-            console.log("expireDateGMT", expireDateGMT);
-            console.log("currentTime", currentTime);
+            //console.log("expireDateGMT", expireDateGMT);
+            //console.log("currentTime", currentTime);
 
             if (source.toLowerCase() === "environment canada") {
                 const hazardRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
@@ -283,7 +283,6 @@ window.addEventListener('load', ()=>{
 
                 if(expireDateGMT < currentTime) {
                     console.log("This warning is expired:", hazardMsg);
-
                     continue;
                 }
                 const extractedMessage = hazardMsg + "\n" + timingMsg;
