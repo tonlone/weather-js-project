@@ -28,9 +28,16 @@ window.addEventListener('load', ()=>{
 
     }
 
+    const myAPIKey = "52c5ddc336f14e3299d13034232603";
+    const header = new Headers();
+    header.append("key", myAPIKey);
     function setWeather(lat, long) {
-        const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?key=52c5ddc336f14e3299d13034232603&q=${lat},${long}&days=5&aqi=no&alerts=yes`;
-        fetch(weatherAPIURL)
+        const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?q=${lat},${long}&days=5&aqi=no&alerts=yes`;
+        // fetch data from API
+        fetch(weatherAPIURL, {
+            method : "GET",
+            headers : header
+        })
             .then (response =>{
                 return response.json();
             })
