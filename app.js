@@ -1,4 +1,5 @@
 window.addEventListener('load', ()=>{
+    let warnMessage = document.getElementById("warning-message");
     let weatherSummary = document.querySelector('.weather-summary');
     let feelsLikeTemperatureDegree = document.querySelector('.feels-like-degree');
     let feelsLikeTemperatureUnit = document.querySelector('.feels-like-degree-section span');
@@ -20,15 +21,15 @@ window.addEventListener('load', ()=>{
         navigator.geolocation.getCurrentPosition(position => {
             const long = position.coords.longitude;
             const lat = position.coords.latitude;
-
+            const locale = navigator.language;
             // Get the user's weather using the OpenWeather API
-            setWeather(lat, long);
+            setWeather(lat, long, locale);
 
         });
 
     }
 
-    function setWeather(lat, long) {
+    function setWeather(lat, long, locale) {
         const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?key=52c5ddc336f14e3299d13034232603&q=${lat},${long}&days=5&aqi=no&alerts=yes`;
         fetch(weatherAPIURL)
             .then (response =>{
@@ -53,6 +54,12 @@ window.addEventListener('load', ()=>{
                 const windGustSpeedData = geolocationData.current.gust_kph;
                 const sunriseTimeData = geolocationData.forecast.forecastday[0].astro.sunrise;
                 const sunsetTimeData = geolocationData.forecast.forecastday[0].astro.sunset;
+
+                const alertsData = geolocationData.alerts;
+                const timeZoneData = geolocationData.location.tz_id;
+
+                // Set Alert
+                setWarning(alertsData,timeZoneData, locale);
 
                 // Get the user's location using the Geolocation API
                 setLocation(lat, long, location, sunriseTimeData, sunsetTimeData);
@@ -83,7 +90,7 @@ window.addEventListener('load', ()=>{
                 currentDateAndTime.textContent = getCurrentDate().toString();
             });
     }
-    
+
     function setWeatherIcon(iconDescData, sunriseDataTime, sunsetDataTime){
         const skycons = new Skycons({"color": "white"});
         const iconMapDay = {
@@ -202,7 +209,7 @@ window.addEventListener('load', ()=>{
 
     /***
      * Barometric pressure
-     * 
+     *
      * Pressure Range (hPa)           |  Weather Condition
      * -----------------------------------------------------------------
      * Above 1022.689                 | Dry, cool, and pleasant weather
@@ -246,6 +253,53 @@ window.addEventListener('load', ()=>{
                 feelsLikeTemperatureDegree.textContent = roundingTo1DP(feelsLikeTempInFahrenheitData);
             }
         });
+    }
+
+    function setWarning(alerts, timeZone, locale) {
+        const listOfWarnings = alerts.alert;
+        console.log("warnings",listOfWarnings);
+
+        let showWarning = false;
+        let resultMsg = "";
+        const endOfLine = "\n";
+
+        for(let i = 0; i < listOfWarnings.length; i++) {
+            const warning = listOfWarnings[i];
+            const source = warning.headline;
+            const category = warning.category;
+            const expire = warning.expires;
+            const originalMessage = warning.desc;
+
+            // Convert GMT time to Date object
+            const expireDateGMT = new Date(expire);
+            // Convert GMT time to local time string
+            const localExpireDateString = expireDateGMT.toLocaleString(locale, { timeZone: timeZone });
+            const localExpireTime = new Date(localExpireDateString).getTime();
+            const currentTime = getCurrentDate().getTime();
+
+            if (source.toLowerCase() === "environment canada") {
+                const hazardRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
+                const TimingRegex = /Timing:[\s\S]*?(?=\n\nDiscussion:)/;
+                const hazardMsg = originalMessage.match(hazardRegex)[0];
+                const timingMsg = originalMessage.match(TimingRegex)[0];
+
+                if(localExpireTime < currentTime) {
+                    console.log("This warning is expired:", hazardMsg);
+
+                    continue;
+                }
+                const extractedMessage = hazardMsg + "\n" + timingMsg;
+                resultMsg += "Warning " + (i+1) + ": " + endOfLine
+                    + category + " " + extractedMessage + endOfLine + endOfLine;
+                showWarning = true;
+            }
+        }
+        // Remove the last 2 endOfLine characters
+        resultMsg = resultMsg.slice(0,-2);
+        if(showWarning) {
+            warnMessage.innerHTML = resultMsg;
+            warnMessage.style.display = 'block';
+        }
     }
 
     function setLocation(lat, long, location, sunriseDataTime, sunseDataTime) {

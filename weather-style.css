@@ -42,6 +42,17 @@ body {
     font-size: 40px;
 }
 
+#warning-message {
+    display: none;
+    background-color: yellow;
+    color: black;
+    padding: 10px;
+}
+
+.new-line {
+    white-space: pre-line;
+}
+
 .uv-index,
 .visibility,
 .humidity,
