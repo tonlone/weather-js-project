@@ -29,7 +29,7 @@ window.addEventListener('load', ()=>{
     }
 
     function setWeather(lat, long) {
-        const weatherAPIURL = `http://api.weatherapi.com/v1/forecast.json?key=52c5ddc336f14e3299d13034232603&q=${lat},${long}&days=5&aqi=no&alerts=yes`;
+        const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?key=52c5ddc336f14e3299d13034232603&q=${lat},${long}&days=5&aqi=no&alerts=yes`;
         fetch(weatherAPIURL)
             .then (response =>{
                 return response.json();
