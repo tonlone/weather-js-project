@@ -65,7 +65,7 @@ window.addEventListener('load', ()=>{
                 const currentTimeData = geolocationData.current.last_updated_epoch;
 
                 // Set Alert
-                setWarning(alertsData,currentTimeData);
+                setHazardWarning(alertsData,currentTimeData);
 
                 // Get the user's location using the Geolocation API
                 setLocation(lat, long, location, sunriseTimeData, sunsetTimeData);
@@ -261,7 +261,7 @@ window.addEventListener('load', ()=>{
         });
     }
 
-    function setWarning(alerts, currentTime) {
+    function setHazardWarning(alerts, currentTime) {
         const warningToggleON = true;
         const listOfWarnings = alerts.alert;
         console.log("warnings",listOfWarnings);
@@ -279,22 +279,34 @@ window.addEventListener('load', ()=>{
 
             // Convert GMT time to Date object
             const expireDateGMT = Date.parse(expire)/1000;
-            //console.log("expireDateGMT", expireDateGMT);
-            //console.log("currentTime", currentTime);
 
             if (source.toLowerCase() === "environment canada") {
                 const hazardRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
                 const TimingRegex = /Timing:[\s\S]*?(?=\n\nDiscussion:)/;
-                const hazardMsg = originalMessage.match(hazardRegex)[0];
-                const timingMsg = originalMessage.match(TimingRegex)[0];
+                let hazardMsg = "";
+                // only Hazard warning will be displayed
+                if(originalMessage.match(hazardRegex) !== null) {
+                    //console.log("expireDateGMT", expireDateGMT);
+                    //console.log("currentTime", currentTime);
+                    //console.log("original warning:",originalMessage);
+                    hazardMsg = originalMessage.match(hazardRegex)[0];
+                    //console.log("hazardMsg",hazardMsg);
+                } else {
+                    // skip the message if there is no Hazard keyword
+                    continue;
+                }
+
+                let timingMsg = "";
+                if(originalMessage.match(TimingRegex) !== null) {
+                    timingMsg = originalMessage.match(TimingRegex)[0];
+                }
 
                 if(expireDateGMT < currentTime) {
                     console.log("This warning is expired:", hazardMsg);
                     continue;
                 }
                 const extractedMessage = hazardMsg + "\n" + timingMsg;
-                resultMsg += "Warning " + (i+1) + ": " + endOfLine
-                    + category + " " + extractedMessage + endOfLine + endOfLine;
+                resultMsg += category + " " + extractedMessage + endOfLine + endOfLine;
                 showWarning = true;
             }
         }
