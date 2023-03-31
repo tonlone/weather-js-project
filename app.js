@@ -281,19 +281,24 @@ window.addEventListener('load', ()=>{
             const expireDateGMT = Date.parse(expire)/1000;
 
             if (source.toLowerCase() === "environment canada") {
-                const hazardRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
+                const hazardsRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
+                const hazardRegex = /Hazard:[\s\S]*?(?=\n\nTiming:)/;
                 const TimingRegex = /Timing:[\s\S]*?(?=\n\nDiscussion:)/;
                 let hazardMsg = "";
                 // only Hazard warning will be displayed
-                if(originalMessage.match(hazardRegex) !== null) {
+                if(originalMessage.match(hazardsRegex) !== null) {
                     //console.log("expireDateGMT", expireDateGMT);
                     //console.log("currentTime", currentTime);
                     //console.log("original warning:",originalMessage);
-                    hazardMsg = originalMessage.match(hazardRegex)[0];
+                    hazardMsg = originalMessage.match(hazardsRegex)[0];
                     //console.log("hazardMsg",hazardMsg);
+
+                } else if (originalMessage.match(hazardRegex) !== null) {
+                    hazardMsg = originalMessage.match(hazardRegex)[0];
                 } else {
-                    // skip the message if there is no Hazard keyword
-                    continue;
+                        // skip the message if there is no Hazard keyword
+                        console.log("skip:", originalMessage);
+                        continue;
                 }
 
                 let timingMsg = "";
@@ -307,6 +312,7 @@ window.addEventListener('load', ()=>{
                 }
                 const extractedMessage = hazardMsg + "\n" + timingMsg;
                 resultMsg += category + " " + extractedMessage + endOfLine + endOfLine;
+                console.log("resultMsg",resultMsg)
                 showWarning = true;
             }
         }
