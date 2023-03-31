@@ -297,7 +297,7 @@ window.addEventListener('load', ()=>{
                     hazardMsg = originalMessage.match(hazardRegex)[0];
                 } else {
                         // skip the message if there is no Hazard keyword
-                        console.log("skip:", originalMessage);
+                        //console.log("skip:", originalMessage);
                         continue;
                 }
 
@@ -312,7 +312,7 @@ window.addEventListener('load', ()=>{
                 }
                 const extractedMessage = hazardMsg + "\n" + timingMsg;
                 resultMsg += category + " " + extractedMessage + endOfLine + endOfLine;
-                console.log("resultMsg",resultMsg)
+                //console.log("resultMsg",resultMsg)
                 showWarning = true;
             }
         }
