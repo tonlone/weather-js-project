@@ -269,6 +269,8 @@ window.addEventListener('load', ()=>{
         let showWarning = false;
         let resultMsg = "";
         const endOfLine = "\n";
+        // Create an object to keep track of unique hazard messages and their corresponding timing messages
+        const uniqueHazards = {};
 
         for(let i = 0; i < listOfWarnings.length; i++) {
             const warning = listOfWarnings[i];
@@ -310,12 +312,22 @@ window.addEventListener('load', ()=>{
                     console.log("This warning is expired:", hazardMsg);
                     continue;
                 }
-                const extractedMessage = hazardMsg + "\n" + timingMsg;
-                resultMsg += category + " " + extractedMessage + endOfLine + endOfLine;
-                //console.log("resultMsg",resultMsg)
+
+                // Keep track of the unique hazard messages and their corresponding timing messages
+                if (uniqueHazards[hazardMsg] === undefined) {
+                    uniqueHazards[hazardMsg] = timingMsg;
+                }
+
                 showWarning = true;
             }
         }
+
+        // Construct the result message by combining the unique hazard messages and their corresponding timing messages
+        for (const [hazardMsg, timingMsg] of Object.entries(uniqueHazards)) {
+            resultMsg += hazardMsg + "\n" + timingMsg + endOfLine + endOfLine;
+        }
+        //console.log("resultMsg",resultMsg)
+
         // Remove the last 2 endOfLine characters
         resultMsg = resultMsg.slice(0,-2);
         if(showWarning && warningToggleON) {
