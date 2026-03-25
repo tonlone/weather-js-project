@@ -1,477 +1,394 @@
-window.addEventListener('load', ()=>{
-    let warnMessage = document.getElementById("warning-message");
-    let weatherSummary = document.querySelector('.weather-summary');
-    let feelsLikeTemperatureDegree = document.querySelector('.feels-like-degree');
-    let feelsLikeTemperatureUnit = document.querySelector('.feels-like-degree-section span');
-    let temperatureDegree = document.querySelector('.temperature-degree');
-    let temperatureSection = document.querySelector('.temperature-section');
-    let temperatureUnit = document.querySelector('.temperature-section span');
-    let currentDateAndTime = document.querySelector('.date-and-time');
-    let iconID = document.querySelector('.icon');
-    let humidity = document.querySelector('.humidity');
-    let pressure = document.querySelector('.pressure');
-    let windDirection = document.querySelector('.wind-direction');
-    let windSpeed = document.querySelector('.wind-speed');
-    let windGustSpeed = document.querySelector('.wind-gust-speed');
-    let sunriseTime = document.querySelector('.sunrise');
-    let sunsetTime = document.querySelector('.sunset');
-    let location = document.querySelector('.location-section .location');
+/**
+ * Weather App — Modernized
+ * Uses WeatherAPI.com for weather data and BigDataCloud for reverse geocoding.
+ */
 
-    if(navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(position => {
-            const long = position.coords.longitude;
-            const lat = position.coords.latitude;
-            // Get the user's weather using the OpenWeather API
-            setWeather(lat, long);
+(() => {
+    "use strict";
 
-        });
+    // ── Config ─────────────────────────────────────────────
+    const API_KEY = "52c5ddc336f14e3299d13034232603";
+    const WEATHER_BASE = "https://api.weatherapi.com/v1";
+    const GEO_BASE = "https://api.bigdatacloud.net/data/reverse-geocode-client";
 
+    // ── State ──────────────────────────────────────────────
+    let useCelsius = true;
+    let currentData = null;
+    let searchTimeout = null;
+
+    // ── DOM refs ───────────────────────────────────────────
+    const $ = (sel) => document.querySelector(sel);
+    const loadingOverlay = $("#loading-overlay");
+    const errorContainer = $("#error-message");
+    const errorText      = $("#error-text");
+    const mainContent    = $("#main-content");
+    const warnBanner     = $("#warning-message");
+
+    const elLocation        = $(".location");
+    const elSummary         = $(".weather-summary");
+    const elTempDeg         = $(".temperature-degree");
+    const elTempUnit        = $(".temperature-unit");
+    const elFeelsLikeDeg    = $(".feels-like-degree");
+    const elFeelsLikeUnit   = $(".feels-like-unit");
+    const elHumidity        = $(".humidity");
+    const elPressure        = $(".pressure");
+    const elPressureDesc    = $(".pressure-desc");
+    const elWindSpeed       = $(".wind-speed");
+    const elWindDir         = $(".wind-direction");
+    const elWindGust        = $(".wind-gust-speed");
+    const elUV              = $(".uv-index");
+    const elUVDesc          = $(".uv-desc");
+    const elVisibility      = $(".visibility");
+    const elSunrise         = $(".sunrise");
+    const elSunset          = $(".sunset");
+    const elDateTime        = $(".date-and-time");
+    const elWeatherIcon     = $("#weather-icon");
+    const elUnitToggle      = $("#unit-toggle");
+    const elSearchInput     = $("#search-input");
+    const elSearchResults   = $("#search-results");
+    const elHourlyContainer = $("#hourly-container");
+    const elDailyContainer  = $("#daily-container");
+
+    // ── Helpers ────────────────────────────────────────────
+    const round1 = (v) => (Math.round(v * 10) / 10).toString();
+    const cToF   = (c) => (c * 9 / 5) + 32;
+
+    function showError(msg) {
+        loadingOverlay.classList.add("hidden");
+        errorText.textContent = msg;
+        errorContainer.style.display = "flex";
     }
 
-    const myAPIKey = "52c5ddc336f14e3299d13034232603";
-    const header = new Headers();
-    header.append("key", myAPIKey);
-    function setWeather(lat, long) {
-        const weatherAPIURL = `https://api.weatherapi.com/v1/forecast.json?q=${lat},${long}&days=5&aqi=no&alerts=yes`;
-        // fetch data from API
-        fetch(weatherAPIURL, {
-            method : "GET",
-            headers : header
-        })
-            .then (response =>{
-                return response.json();
-            })
-            .then(geolocationData => {
-                console.log(geolocationData);
-
-                const feelsLikeTemperatureData = geolocationData.current.feelslike_c;
-                const temperatureData = geolocationData.current.temp_c;
-                //console.log("temperature: " + temperatureData);
-                const iconDescData = geolocationData.current.condition.text;
-                //console.log("icon: " + iconDescData);
-                const weatherSummaryData = geolocationData.current.condition.text;
-                //console.log("summary: " + weatherSummaryData);
-                const humidityData = geolocationData.current.humidity;
-                const pressureData = geolocationData.current.pressure_mb;
-                //console.log("pressure: " + pressure);
-                const windDirectionData = geolocationData.current.wind_degree;
-                //console.log("wind direction (degree): " + windDirectionData);
-                const windSpeedData = geolocationData.current.wind_kph;
-                const windGustSpeedData = geolocationData.current.gust_kph;
-                const sunriseTimeData = geolocationData.forecast.forecastday[0].astro.sunrise;
-                const sunsetTimeData = geolocationData.forecast.forecastday[0].astro.sunset;
-
-                const alertsData = geolocationData.alerts;
-                const currentTimeData = geolocationData.current.last_updated_epoch;
-
-                // Set Alert
-                setHazardWarning(alertsData,currentTimeData);
-
-                // Get the user's location using the Geolocation API
-                setLocation(lat, long, location, sunriseTimeData, sunsetTimeData);
-
-                //Set DOM Elements from the API
-                setWeatherIcon(iconDescData, sunriseTimeData, sunsetTimeData);
-                //Set temperature info
-                feelsLikeTemperatureDegree.textContent = roundingTo1DP(feelsLikeTemperatureData);
-                temperatureDegree.textContent = roundingTo1DP(temperatureData);
-                temperatureUnit.textContent = "°C";
-                feelsLikeTemperatureUnit.textContent = "°C";
-                weatherSummary.textContent = weatherSummaryData;
-
-                // set humidity and pressure
-                humidity.textContent = humidityData;
-                pressure.textContent = pressureData + getPressureDesc(pressureData, temperatureData);
-                // set Wind
-                windDirection.textContent = getWindDirectionByDegree(getClosestWindDirDegree(windDirectionData));
-                windSpeed.textContent = windSpeedData;
-                windGustSpeed.textContent = windGustSpeedData;
-
-                // set sunrise time and sunset time
-                sunriseTime.textContent = sunriseTimeData;
-                sunsetTime.textContent = sunsetTimeData;
-
-                setTemperatureMouseEventListener(temperatureData, feelsLikeTemperatureData);
-
-                currentDateAndTime.textContent = getCurrentDate().toString();
-            });
+    function hideLoading() {
+        loadingOverlay.classList.add("hidden");
+        mainContent.style.display = "block";
     }
 
-    function setWeatherIcon(iconDescData, sunriseDataTime, sunsetDataTime){
-        const skycons = new Skycons({"color": "white"});
-        const iconMapDay = {
-            'Sunny': Skycons.CLEAR_DAY,
-            'Partly cloudy': Skycons.PARTLY_CLOUDY_DAY,
-            'Cloudy': Skycons.CLOUDY,
-            'Overcast': Skycons.CLOUDY,
-            'Patchy rain possible': Skycons.SHOWERS_DAY,
-            'Patchy snow possible': Skycons.SNOW_SHOWERS_DAY,
-            'Sleet': Skycons.SLEET,
-            'Patchy freezing drizzle possible': Skycons.SHOWERS_DAY,
-            'Thundery outbreaks possible': Skycons.THUNDER_SHOWERS_DAY,
-            'Blowing snow': Skycons.SNOW,
-            'Blizzard': Skycons.SNOW,
-            'Fog': Skycons.FOG,
-            'Freezing fog': Skycons.FOG,
-            'Mist': Skycons.FOG,
-            'Patchy light drizzle': Skycons.SHOWERS_DAY,
-            'Light drizzle': Skycons.SHOWERS_DAY,
-            'Freezing drizzle': Skycons.SHOWERS_DAY,
-            'Heavy freezing drizzle': Skycons.SHOWERS_DAY,
-            'Patchy light rain': Skycons.SHOWERS_DAY,
-            'Light rain': Skycons.SHOWERS_DAY,
-            'Moderate rain at times': Skycons.SHOWERS_DAY,
-            'Moderate rain': Skycons.RAIN,
-            'Heavy rain at times': Skycons.RAIN,
-            'Heavy rain': Skycons.RAIN,
-            'Light freezing rain': Skycons.SHOWERS_DAY,
-            'Moderate or heavy freezing rain': Skycons.RAIN,
-            'Light sleet': Skycons.SLEET,
-            'Moderate or heavy sleet': Skycons.SLEET,
-            'Patchy light snow': Skycons.SNOW_SHOWERS_DAY,
-            'Light snow': Skycons.SNOW_SHOWERS_DAY,
-            'Patchy moderate snow': Skycons.SNOW,
-            'Moderate snow': Skycons.SNOW,
-            'Patchy heavy snow': Skycons.SNOW,
-            'Heavy snow': Skycons.SNOW,
-            'Ice pellets': Skycons.SNOW,
-            'Light rain shower': Skycons.SHOWERS_DAY,
-            'Moderate or heavy rain shower': Skycons.RAIN,
-            'Torrential rain shower': Skycons.RAIN,
-            'Light sleet showers': Skycons.RAIN_SNOW_SHOWERS_DAY,
-            'Moderate or heavy sleet showers': Skycons.SNOW_SHOWERS_DAY,
-            'Light snow showers': Skycons.SNOW_SHOWERS_DAY,
-            'Light showers of ice pellets': Skycons.RAIN_SNOW,
-            'Moderate or heavy showers of ice pellets': Skycons.RAIN_SNOW,
-            'Patchy light rain with thunder': Skycons.THUNDER_SHOWERS_DAY,
-            'Moderate or heavy rain with thunder': Skycons.THUNDER_RAIN,
-            'Patchy light snow with thunder': Skycons.THUNDER_SHOWERS_DAY,
-            'Moderate or heavy snow with thunder': Skycons.THUNDER_SHOWERS_DAY,
-            'default': Skycons.CLEAR_DAY
-        };
-        const iconMapNight = {
-            'Clear': Skycons.CLEAR_NIGHT,
-            'Partly cloudy': Skycons.PARTLY_CLOUDY_NIGHT,
-            'Cloudy': Skycons.CLOUDY,
-            'Overcast': Skycons.CLOUDY,
-            'Patchy rain possible': Skycons.SHOWERS_NIGHT,
-            'Patchy snow possible': Skycons.SNOW_SHOWERS_NIGHT,
-            'Sleet': Skycons.SLEET,
-            'Patchy freezing drizzle possible': Skycons.SHOWERS_NIGHT,
-            'Thundery outbreaks possible': Skycons.THUNDER_SHOWERS_NIGHT,
-            'Blowing snow': Skycons.SNOW,
-            'Blizzard': Skycons.SNOW,
-            'Fog': Skycons.FOG,
-            'Freezing fog': Skycons.FOG,
-            'Mist': Skycons.FOG,
-            'Patchy light drizzle': Skycons.SHOWERS_NIGHT,
-            'Light drizzle': Skycons.SHOWERS_NIGHT,
-            'Freezing drizzle': Skycons.SHOWERS_NIGHT,
-            'Heavy freezing drizzle': Skycons.SHOWERS_NIGHT,
-            'Patchy light rain': Skycons.SHOWERS_NIGHT,
-            'Light rain': Skycons.SHOWERS_NIGHT,
-            'Moderate rain at times': Skycons.SHOWERS_NIGHT,
-            'Moderate rain': Skycons.RAIN,
-            'Heavy rain at times': Skycons.RAIN,
-            'Heavy rain': Skycons.RAIN,
-            'Light freezing rain': Skycons.SHOWERS_NIGHT,
-            'Moderate or heavy freezing rain': Skycons.RAIN,
-            'Light sleet': Skycons.SLEET,
-            'Moderate or heavy sleet': Skycons.SLEET,
-            'Patchy light snow': Skycons.SNOW_SHOWERS_NIGHT,
-            'Light snow': Skycons.SNOW_SHOWERS_NIGHT,
-            'Patchy moderate snow': Skycons.SNOW,
-            'Moderate snow': Skycons.SNOW,
-            'Patchy heavy snow': Skycons.SNOW,
-            'Heavy snow': Skycons.SNOW,
-            'Ice pellets': Skycons.SNOW,
-            'Light rain shower': Skycons.SHOWERS_NIGHT,
-            'Moderate or heavy rain shower': Skycons.RAIN,
-            'Torrential rain shower': Skycons.RAIN,
-            'Light sleet showers': Skycons.RAIN_SNOW_SHOWERS_NIGHT,
-            'Moderate or heavy sleet showers': Skycons.SNOW_SHOWERS_NIGHT,
-            'Light snow showers': Skycons.SNOW_SHOWERS_NIGHT,
-            'Moderate or heavy snow showers': Skycons.SNOW_SHOWERS_NIGHT,
-            'Light showers of ice pellets': Skycons.RAIN_SNOW,
-            'Moderate or heavy showers of ice pellets': Skycons.RAIN_SNOW,
-            'Patchy light rain with thunder': Skycons.THUNDER_SHOWERS_NIGHT,
-            'Moderate or heavy rain with thunder': Skycons.THUNDER_RAIN,
-            'Patchy light snow with thunder': Skycons.THUNDER_SHOWERS_NIGHT,
-            'Moderate or heavy snow with thunder': Skycons.THUNDER_SHOWERS_NIGHT,
-            'default': Skycons.CLEAR_NIGHT
-        };
+    function uvDescription(uv) {
+        if (uv <= 2)  return "Low";
+        if (uv <= 5)  return "Moderate";
+        if (uv <= 7)  return "High";
+        if (uv <= 10) return "Very High";
+        return "Extreme";
+    }
 
-        let currentIcon;
-        if(isDayTime(sunriseDataTime, sunsetDataTime) ) {
-            currentIcon = iconMapDay[iconDescData];
-            //console.log("Set Day icon")
-        } else {
-            currentIcon = iconMapNight[iconDescData];
-            //console.log("Set Night icon")
+    function pressureDescription(p, tempC) {
+        if (typeof p !== "number") return "";
+        if (p > 1022.689) return "Pleasant";
+        if (p >= 1009.144) return "Steady";
+        if (tempC > 0) return "Rainstorms possible";
+        return "Snowstorms possible";
+    }
+
+    function windDirection(deg) {
+        const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+        return dirs[Math.round(deg / 22.5) % 16];
+    }
+
+    function parseTime12(str) {
+        const [time, ampm] = str.split(" ");
+        let [h, m] = time.split(":").map(Number);
+        if (ampm === "PM" && h !== 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        return h * 60 + m;
+    }
+
+    function isDayTime(sunrise, sunset) {
+        const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        return mins >= parseTime12(sunrise) && mins < parseTime12(sunset);
+    }
+
+    function updateSunArc(sunrise, sunset) {
+        const sunCircle = $("#sun-position");
+        if (!sunCircle) return;
+        const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        const rise = parseTime12(sunrise);
+        const set  = parseTime12(sunset);
+
+        if (mins < rise || mins > set) {
+            sunCircle.style.display = "none";
+            return;
         }
-        skycons.play();
-        return skycons.set(iconID, currentIcon);
+        const progress = (mins - rise) / (set - rise);
+        const p0 = { x: 10, y: 90 };
+        const p1 = { x: 100, y: 0 };
+        const p2 = { x: 190, y: 90 };
+        const t = progress;
+        const cx = (1 - t) ** 2 * p0.x + 2 * (1 - t) * t * p1.x + t ** 2 * p2.x;
+        const cy = (1 - t) ** 2 * p0.y + 2 * (1 - t) * t * p1.y + t ** 2 * p2.y;
+        sunCircle.setAttribute("cx", cx);
+        sunCircle.setAttribute("cy", cy);
+        sunCircle.style.display = "block";
     }
 
-    /***
-     * Barometric pressure
-     *
-     * Pressure Range (hPa)           |  Weather Condition
-     * -----------------------------------------------------------------
-     * Above 1022.689                 | Dry, cool, and pleasant weather
-     * Between 1009.144 and 1022.689  | Steady weather
-     * Below 1009.144                 | Warm air and rainstorms / snowstorms
-     */
-    function getPressureDesc(pressure, temperature) {
-        if (typeof pressure !== 'number') {
-            return 'Invalid input: pressure must be a number';
+    function iconUrl(conditionIcon) {
+        return "https:" + conditionIcon.replace("64x64", "128x128");
+    }
+
+    async function apiFetch(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("API error: " + res.status);
+        return res.json();
+    }
+
+    // ── Set hazard warnings ─────────────────────────────────
+    function setHazardWarning(alerts, currentEpoch) {
+        const list = alerts.alert;
+        if (!list || list.length === 0) return;
+
+        const unique = {};
+        const hazardsRe  = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
+        const hazardRe   = /Hazard:[\s\S]*?(?=\n\nTiming:)/;
+        const timingRe   = /Timing:[\s\S]*?(?=\n\nDiscussion:)/;
+
+        for (const w of list) {
+            const expiry = Date.parse(w.expires) / 1000;
+            if (expiry < currentEpoch) continue;
+
+            const msg = w.desc;
+            let hazardMsg = "";
+            if (hazardsRe.test(msg))      hazardMsg = msg.match(hazardsRe)[0];
+            else if (hazardRe.test(msg))   hazardMsg = msg.match(hazardRe)[0];
+            else continue;
+
+            const timingMatch = msg.match(timingRe);
+            const timingMsg = timingMatch ? timingMatch[0] : "";
+
+            if (!unique[hazardMsg]) unique[hazardMsg] = timingMsg;
         }
-        if(pressure > 1022.689) {
-            return " [Dry, cool, and pleasant weather]";
-        } else if (pressure >= 1009.144) {
-            return " [Steady weather]";
-        } else if (pressure < 1009.144 && temperature > 0) {
-            return " [Unstable and and potentially rainstorms]";
-        }  else if (pressure < 1009.144 && temperature <= 0) {
-            return " [Unstable and and potentially snowstorms]";
+
+        const entries = Object.entries(unique);
+        if (entries.length === 0) return;
+
+        const result = entries.map(([h, t]) => h + "\n" + t).join("\n\n");
+        warnBanner.innerHTML = result;
+        warnBanner.style.display = "block";
+    }
+
+    // ── Render current weather ───────────────────────────────
+    function renderCurrent(data) {
+        const cur = data.current;
+        const astro = data.forecast.forecastday[0].astro;
+
+        elWeatherIcon.src = iconUrl(cur.condition.icon);
+        elWeatherIcon.alt = cur.condition.text;
+        elSummary.textContent = cur.condition.text;
+
+        const tempC = cur.temp_c;
+        const feelsC = cur.feelslike_c;
+        elTempDeg.textContent = round1(useCelsius ? tempC : cToF(tempC));
+        elTempUnit.textContent = useCelsius ? "°C" : "°F";
+        elFeelsLikeDeg.textContent = round1(useCelsius ? feelsC : cToF(feelsC));
+        elFeelsLikeUnit.textContent = useCelsius ? "°C" : "°F";
+
+        elHumidity.textContent = cur.humidity + "%";
+        elWindSpeed.textContent = cur.wind_kph + " km/h";
+        elWindDir.textContent = windDirection(cur.wind_degree) + " " + cur.wind_kph + " km/h";
+        elWindGust.textContent = cur.gust_kph + " km/h";
+
+        const pMb = cur.pressure_mb;
+        elPressure.textContent = pMb + " hPa";
+        elPressureDesc.textContent = pressureDescription(pMb, tempC);
+
+        elUV.textContent = cur.uv;
+        elUVDesc.textContent = uvDescription(cur.uv);
+        elVisibility.textContent = cur.vis_km + " km";
+
+        elSunrise.textContent = astro.sunrise;
+        elSunset.textContent  = astro.sunset;
+        updateSunArc(astro.sunrise, astro.sunset);
+
+        setHazardWarning(data.alerts, cur.last_updated_epoch);
+        elDateTime.textContent = new Date().toString();
+    }
+
+    // ── Render hourly forecast ───────────────────────────────
+    function renderHourly(data) {
+        const hours = [];
+        const nowHour = new Date().getHours();
+        const today = data.forecast.forecastday[0].hour;
+        const tomorrow = data.forecast.forecastday[1] ? data.forecast.forecastday[1].hour : [];
+
+        for (const h of today) {
+            const hh = new Date(h.time).getHours();
+            if (hh >= nowHour) hours.push(h);
+        }
+        for (const h of tomorrow) {
+            if (hours.length >= 24) break;
+            hours.push(h);
+        }
+
+        elHourlyContainer.innerHTML = hours.slice(0, 24).map((h, i) => {
+            const hr = new Date(h.time).getHours();
+            const label = i === 0 ? "Now" : (hr === 0 ? "12 AM" : hr <= 12 ? hr + (hr === 12 ? " PM" : " AM") : (hr - 12) + " PM");
+            const temp = useCelsius ? round1(h.temp_c) : round1(cToF(h.temp_c));
+            return `
+                <div class="hourly-item${i === 0 ? " now" : ""}">
+                    <div class="hourly-time">${label}</div>
+                    <img class="hourly-icon" src="https:${h.condition.icon}" alt="${h.condition.text}">
+                    <div class="hourly-temp">${temp}°</div>
+                </div>`;
+        }).join("");
+    }
+
+    // ── Render 5-day forecast ────────────────────────────────
+    function renderDaily(data) {
+        const days = data.forecast.forecastday;
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        elDailyContainer.innerHTML = days.map((d, i) => {
+            const dt = new Date(d.date + "T12:00:00");
+            const dayLabel = i === 0 ? "Today" : dayNames[dt.getDay()];
+            const dateLabel = monthNames[dt.getMonth()] + " " + dt.getDate();
+            const hi = useCelsius ? round1(d.day.maxtemp_c) : round1(cToF(d.day.maxtemp_c));
+            const lo = useCelsius ? round1(d.day.mintemp_c) : round1(cToF(d.day.mintemp_c));
+            return `
+                <div class="daily-item">
+                    <div class="daily-day">${dayLabel} <span class="daily-date">${dateLabel}</span></div>
+                    <img class="daily-icon" src="https:${d.day.condition.icon}" alt="${d.day.condition.text}">
+                    <div class="daily-condition">${d.day.condition.text}</div>
+                    <div class="daily-temps">
+                        <span class="daily-high">${hi}°</span>
+                        <span class="daily-low">${lo}°</span>
+                    </div>
+                </div>`;
+        }).join("");
+    }
+
+    function renderAll(data) {
+        currentData = data;
+        renderCurrent(data);
+        renderHourly(data);
+        renderDaily(data);
+    }
+
+    // ── Set location name ───────────────────────────────────
+    async function setLocationName(lat, lon, sunrise, sunset) {
+        try {
+            const geo = await apiFetch(GEO_BASE + "?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=en");
+            const tag = isDayTime(sunrise, sunset) ? " (Day)" : " (Night)";
+            const sub = geo.principalSubdivision;
+            elLocation.textContent = geo.city + ", " + (sub || geo.countryName) + tag;
+        } catch {
+            elLocation.textContent = lat.toFixed(2) + ", " + lon.toFixed(2);
         }
     }
 
-    function setTemperatureMouseEventListener(temperatureData, feelsLikeTempData) {
-        const currTempInCelsiusData = temperatureData;
-        const feelsLikeTempInCelsiusData = feelsLikeTempData;
+    // ── Main fetch ───────────────────────────────────────────
+    async function loadWeather(lat, lon) {
+        try {
+            const url = WEATHER_BASE + "/forecast.json?key=" + API_KEY + "&q=" + lat + "," + lon + "&days=5&aqi=no&alerts=yes";
+            const data = await apiFetch(url);
+            const astro = data.forecast.forecastday[0].astro;
 
-        // formula for fahrenheit
-        const currTempInFahrenheitData = (currTempInCelsiusData * 9 / 5 ) + 32;
-        const feelsLikeTempInFahrenheitData = (feelsLikeTempInCelsiusData * 9 / 5) + 32;
+            renderAll(data);
+            await setLocationName(lat, lon, astro.sunrise, astro.sunset);
+            hideLoading();
+        } catch (err) {
+            console.error(err);
+            showError("Unable to fetch weather data. Please try again.");
+        }
+    }
 
-        // Change from F to C or vice versa based on mouseClick
-        temperatureSection.addEventListener("click", () => {
-            if(temperatureUnit.textContent === "°F") {
-                temperatureUnit.textContent = "°C";
-                feelsLikeTemperatureUnit.textContent = temperatureUnit.textContent;
-                temperatureDegree.textContent = roundingTo1DP(currTempInCelsiusData);
-                feelsLikeTemperatureDegree.textContent = roundingTo1DP(feelsLikeTempInCelsiusData);
-            } else {
-                temperatureUnit.textContent = "°F";
-                feelsLikeTemperatureUnit.textContent = temperatureUnit.textContent;
-                temperatureDegree.textContent = roundingTo1DP(currTempInFahrenheitData);
-                feelsLikeTemperatureDegree.textContent = roundingTo1DP(feelsLikeTempInFahrenheitData);
+    // ── Load by city query ───────────────────────────────────
+    async function loadWeatherByQuery(query) {
+        loadingOverlay.classList.remove("hidden");
+        mainContent.style.display = "none";
+        try {
+            const url = WEATHER_BASE + "/forecast.json?key=" + API_KEY + "&q=" + encodeURIComponent(query) + "&days=5&aqi=no&alerts=yes";
+            const data = await apiFetch(url);
+            const loc = data.location;
+
+            renderAll(data);
+
+            const astro = data.forecast.forecastday[0].astro;
+            const tag = isDayTime(astro.sunrise, astro.sunset) ? " (Day)" : " (Night)";
+            const region = loc.region || loc.country;
+            elLocation.textContent = loc.name + ", " + region + tag;
+
+            hideLoading();
+        } catch (err) {
+            console.error(err);
+            showError("City not found. Please try a different search.");
+        }
+    }
+
+    // ── Search autocomplete ──────────────────────────────────
+    async function searchCities(query) {
+        if (query.length < 2) {
+            elSearchResults.classList.remove("visible");
+            return;
+        }
+        try {
+            const url = WEATHER_BASE + "/search.json?key=" + API_KEY + "&q=" + encodeURIComponent(query);
+            const results = await apiFetch(url);
+            if (results.length === 0) {
+                elSearchResults.classList.remove("visible");
+                return;
             }
-        });
+            elSearchResults.innerHTML = results.slice(0, 5).map(r => {
+                const label = r.name + ", " + (r.region ? r.region + ", " : "") + r.country;
+                return '<div class="search-result-item" data-query="' + r.lat + ',' + r.lon + '">' + label + '</div>';
+            }).join("");
+            elSearchResults.classList.add("visible");
+        } catch {
+            elSearchResults.classList.remove("visible");
+        }
     }
 
-    function setHazardWarning(alerts, currentTime) {
-        const warningToggleON = true;
-        const listOfWarnings = alerts.alert;
-        console.log("warnings",listOfWarnings);
+    // ── Event listeners ─────────────────────────────────────
 
-        let showWarning = false;
-        let resultMsg = "";
-        const endOfLine = "\n";
-        // Create an object to keep track of unique hazard messages and their corresponding timing messages
-        const uniqueHazards = {};
+    elUnitToggle.addEventListener("click", () => {
+        useCelsius = !useCelsius;
+        elUnitToggle.textContent = useCelsius ? "°C" : "°F";
+        if (currentData) renderAll(currentData);
+    });
 
-        for(let i = 0; i < listOfWarnings.length; i++) {
-            const warning = listOfWarnings[i];
-            const source = warning.headline;
-            const category = warning.category;
-            const expire = warning.expires;
-            const originalMessage = warning.desc;
+    elSearchInput.addEventListener("input", (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => searchCities(e.target.value.trim()), 300);
+    });
 
-            // Convert GMT time to Date object
-            const expireDateGMT = Date.parse(expire)/1000;
-
-            if (source.toLowerCase() === "environment canada") {
-                const hazardsRegex = /Hazards:[\s\S]*?(?=\n\nTiming:)/;
-                const hazardRegex = /Hazard:[\s\S]*?(?=\n\nTiming:)/;
-                const TimingRegex = /Timing:[\s\S]*?(?=\n\nDiscussion:)/;
-                let hazardMsg = "";
-                // only Hazard warning will be displayed
-                if(originalMessage.match(hazardsRegex) !== null) {
-                    //console.log("expireDateGMT", expireDateGMT);
-                    //console.log("currentTime", currentTime);
-                    //console.log("original warning:",originalMessage);
-                    hazardMsg = originalMessage.match(hazardsRegex)[0];
-                    //console.log("hazardMsg",hazardMsg);
-
-                } else if (originalMessage.match(hazardRegex) !== null) {
-                    hazardMsg = originalMessage.match(hazardRegex)[0];
-                } else {
-                        // skip the message if there is no Hazard keyword
-                        //console.log("skip:", originalMessage);
-                        continue;
-                }
-
-                let timingMsg = "";
-                if(originalMessage.match(TimingRegex) !== null) {
-                    timingMsg = originalMessage.match(TimingRegex)[0];
-                }
-
-                if(expireDateGMT < currentTime) {
-                    console.log("This warning is expired:", hazardMsg);
-                    continue;
-                }
-
-                // Keep track of the unique hazard messages and their corresponding timing messages
-                if (uniqueHazards[hazardMsg] === undefined) {
-                    uniqueHazards[hazardMsg] = timingMsg;
-                }
-
-                showWarning = true;
+    elSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const val = elSearchInput.value.trim();
+            if (val) {
+                elSearchResults.classList.remove("visible");
+                loadWeatherByQuery(val);
             }
         }
+    });
 
-        // Construct the result message by combining the unique hazard messages and their corresponding timing messages
-        for (const [hazardMsg, timingMsg] of Object.entries(uniqueHazards)) {
-            resultMsg += hazardMsg + "\n" + timingMsg + endOfLine + endOfLine;
+    elSearchResults.addEventListener("click", (e) => {
+        const item = e.target.closest(".search-result-item");
+        if (!item) return;
+        elSearchInput.value = item.textContent;
+        elSearchResults.classList.remove("visible");
+        loadWeatherByQuery(item.dataset.query);
+    });
+
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".search-container")) {
+            elSearchResults.classList.remove("visible");
         }
-        //console.log("resultMsg",resultMsg)
+    });
 
-        // Remove the last 2 endOfLine characters
-        resultMsg = resultMsg.slice(0,-2);
-        if(showWarning && warningToggleON) {
-            warnMessage.innerHTML = resultMsg;
-            warnMessage.style.display = 'block';
-        }
+    // ── Init ───────────────────────────────────────────────
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => loadWeather(pos.coords.latitude, pos.coords.longitude),
+            (err) => {
+                console.warn("Geolocation denied:", err.message);
+                loadWeather(43.8828, -79.4403);
+            },
+            { timeout: 10000 }
+        );
+    } else {
+        loadWeather(43.8828, -79.4403);
     }
 
-    function setLocation(lat, long, location, sunriseDataTime, sunseDataTime) {
-        //console.log("long: ", long);
-        //console.log("lat: ", lat);
-        // Get the user's location using the Geolocation API
-        const locationAPIUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${long}&localityLanguage=en`;
-        fetch(locationAPIUrl)
-            .then(response => {
-                return response.json();
-            })
-            .then(weatherData => {
-                //console.log(weatherData);
-                //const locationName = `${weatherData.city}, ${weatherData.principalSubdivision}, ${weatherData.countryName}`;
-                //console.log("locationName: ", locationName);
-                const dayOrNight = isDayTime(sunriseDataTime, sunseDataTime) ? " (Day)" : " (Night)";
-                if(weatherData.principalSubdivision.length === 0) {
-                    location.textContent = weatherData.city + ", " + weatherData.countryName + dayOrNight;
-                } else {
-                    location.textContent = weatherData.city + ", " + weatherData.principalSubdivision + dayOrNight;
-                }
-                //location.textContent = weatherData.city + ", " + weatherData.principalSubdivision;
-            });
-    }
-
-    function getClosestWindDirDegree(degree) {
-        const degreeList = [0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5, 360],
-            goal = degree;
-        return degreeList.reduce(function(prev, curr) {
-            return (Math.abs(curr - goal) < Math.abs(prev - goal) ? curr : prev);
-        });
-    }
-
-    /**
-     * 0° — north wind (N)
-     * 22.5° — north-northeast wind (NNE)
-     * 45° — northeast wind (NE)
-     * 67.5° — east-northeast wind (ENE)
-     * 90°— east wind (E)
-     * 112.5° — east-southeast wind (ESE)
-     * 135° — southeast wind (SE)
-     * 157.5° — south-southeast wind (SSE)
-     * 180° — south wind (S)
-     * 202.5° — south-southwest wind (SSW)
-     * 225° — southwest wind (SW)
-     * 247.5° — west-southwest wind (WSW)
-     * 270° — west wind (W)
-     * 292.5° — west-northwest wind (WNW)
-     * 315° — northwest wind (NW)
-     * 337.5° — north-northwest wind (NNW)
-     * 360° — north wind (N)
-     */
-    function getWindDirectionByDegree(degree) {
-        const windDirectionMap = {
-            '0': "North",
-
-            '22.5': "NNEast",
-            '45': "NorthEast",
-            '67.5': "ENEast",
-            '90': "East",
-
-            '112.5': "ESEast",
-            '135': "SouthEast",
-            '157.5': "SEEast",
-            '180': "South",
-
-            '202.5': "SSWest",
-            '225': "SouthWest",
-            '247.5': "WSWest",
-            '270': "West",
-
-            '292.5': "WNWest",
-            '315': "NorthWest",
-            '337.5': "NNWest",
-            '360': "North",
-            'default': "Unknown"
-        };
-        return windDirectionMap[degree];
-    }
-
-    function getCurrentDate() {
-        return new Date();
-    }
-    function isDayTime(sunriseDataTime, sunsetDataTime) {
-        const sunriseTime = parseTimeFromHHMMAMPMFormat(sunriseDataTime);
-        //console.log("sunrise hour:", sunriseTime.hour);
-        //console.log("sunrise minute:", sunriseTime.minute);
-
-        const sunsetTime = parseTimeFromHHMMAMPMFormat(sunsetDataTime);
-        //console.log("sunset hour:", sunsetTime.hour);
-        //console.log("sunset minute:", sunsetTime.minute);
-
-        if(isBetween(sunsetTime,sunriseTime,)) {
-            //console.log("It is night time:");
-            return false;
-        } else {
-            //console.log("It is day time:");
-            return true;
-        }
-    }
-
-    function isBetween(startTime, endTime) {
-        const currentHour = getCurrentDate().getHours();
-        const currentMinute = getCurrentDate().getMinutes();
-        //console.log("currentHour:", currentHour);
-        //console.log("currentMinute:", currentMinute);
-        if (currentHour > startTime.hour || currentHour < endTime.hour) {
-            //console.log("It is between1");
-            return true;
-        } else if (currentHour === startTime.hour && currentMinute >= startTime.minute) {
-            //console.log("It is between2");
-            return true;
-        } else if (currentHour === endTime.hour && currentMinute < endTime.minute) {
-            //console.log("It is between3");
-            return true
-        } else {
-            //console.log("It is NOT between");
-            return false;
-        }
-    }
-
-    function parseTimeFromHHMMAMPMFormat(timeString) {
-        const [time, indicator] = timeString.split(" ");
-        const [hour12, minute] = time.split(":");
-
-        let hour = parseInt(hour12);
-        if (indicator === "PM" && hour !== 12) {
-            hour += 12;
-        } else if (indicator === "AM" && hour === 12) {
-            hour = 0;
-        }
-        //const formattedTime = `${hour.toString()}:${minute}`;
-        //console.log(formattedTime);
-        //const d = new Date();
-        return {hour, minute};
-    }
-
-    function roundingTo1DP(value) {
-        return (Math.round(value*10)/10).toString()
-    }
-});
+})();
