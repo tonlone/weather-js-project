@@ -6,17 +6,17 @@
 (() => {
     "use strict";
 
-    // ── Config ─────────────────────────────────────────────
+    // ── Config ──────────────────────────────────────────────────
     const API_KEY = "52c5ddc336f14e3299d13034232603";
     const WEATHER_BASE = "https://api.weatherapi.com/v1";
     const GEO_BASE = "https://api.bigdatacloud.net/data/reverse-geocode-client";
 
-    // ── State ──────────────────────────────────────────────
+    // ── State ───────────────────────────────────────────────────
     let useCelsius = true;
-    let currentData = null;
+    let currentData = null;   // cached API response
     let searchTimeout = null;
 
-    // ── DOM refs ───────────────────────────────────────────
+    // ── DOM refs ────────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
     const loadingOverlay = $("#loading-overlay");
     const errorContainer = $("#error-message");
@@ -49,7 +49,7 @@
     const elHourlyContainer = $("#hourly-container");
     const elDailyContainer  = $("#daily-container");
 
-    // ── Helpers ────────────────────────────────────────────
+    // ── Helpers ─────────────────────────────────────────────────
     const round1 = (v) => (Math.round(v * 10) / 10).toString();
     const cToF   = (c) => (c * 9 / 5) + 32;
 
@@ -64,6 +64,7 @@
         mainContent.style.display = "block";
     }
 
+    // ── UV description ────────────────────────────────────────────
     function uvDescription(uv) {
         if (uv <= 2)  return "Low";
         if (uv <= 5)  return "Moderate";
@@ -72,6 +73,7 @@
         return "Extreme";
     }
 
+    // ── Pressure description ────────────────────────────────────────
     function pressureDescription(p, tempC) {
         if (typeof p !== "number") return "";
         if (p > 1022.689) return "Pleasant";
@@ -80,11 +82,13 @@
         return "Snowstorms possible";
     }
 
+    // ── Wind direction ────────────────────────────────────────────
     function windDirection(deg) {
         const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
         return dirs[Math.round(deg / 22.5) % 16];
     }
 
+    // ── Day / night check ─────────────────────────────────────────
     function parseTime12(str) {
         const [time, ampm] = str.split(" ");
         let [h, m] = time.split(":").map(Number);
@@ -99,6 +103,7 @@
         return mins >= parseTime12(sunrise) && mins < parseTime12(sunset);
     }
 
+    // ── Sun arc position ──────────────────────────────────────────
     function updateSunArc(sunrise, sunset) {
         const sunCircle = $("#sun-position");
         if (!sunCircle) return;
@@ -111,7 +116,8 @@
             sunCircle.style.display = "none";
             return;
         }
-        const progress = (mins - rise) / (set - rise);
+        const progress = (mins - rise) / (set - rise);       // 0→1
+        // Quadratic bezier: P = (1-t)²·P0 + 2(1-t)t·P1 + t²·P2
         const p0 = { x: 10, y: 90 };
         const p1 = { x: 100, y: 0 };
         const p2 = { x: 190, y: 90 };
@@ -123,17 +129,19 @@
         sunCircle.style.display = "block";
     }
 
+    // ── Weather icon URL (WeatherAPI provides icons) ────────
     function iconUrl(conditionIcon) {
         return "https:" + conditionIcon.replace("64x64", "128x128");
     }
 
+    // ── Fetch wrapper ───────────────────────────────────────────
     async function apiFetch(url) {
         const res = await fetch(url);
         if (!res.ok) throw new Error("API error: " + res.status);
         return res.json();
     }
 
-    // ── Set hazard warnings ─────────────────────────────────
+    // ── Set hazard warnings (preserved original logic) ──────
     function setHazardWarning(alerts, currentEpoch) {
         const list = alerts.alert;
         if (!list || list.length === 0) return;
@@ -167,15 +175,19 @@
         warnBanner.style.display = "block";
     }
 
-    // ── Render current weather ───────────────────────────────
+    // ── Render current weather ──────────────────────────────────────
     function renderCurrent(data) {
         const cur = data.current;
         const astro = data.forecast.forecastday[0].astro;
 
+        // Icon
         elWeatherIcon.src = iconUrl(cur.condition.icon);
         elWeatherIcon.alt = cur.condition.text;
+
+        // Summary
         elSummary.textContent = cur.condition.text;
 
+        // Temperatures
         const tempC = cur.temp_c;
         const feelsC = cur.feelslike_c;
         elTempDeg.textContent = round1(useCelsius ? tempC : cToF(tempC));
@@ -183,6 +195,7 @@
         elFeelsLikeDeg.textContent = round1(useCelsius ? feelsC : cToF(feelsC));
         elFeelsLikeUnit.textContent = useCelsius ? "°C" : "°F";
 
+        // Details
         elHumidity.textContent = cur.humidity + "%";
         elWindSpeed.textContent = cur.wind_kph + " km/h";
         elWindDir.textContent = windDirection(cur.wind_degree) + " " + cur.wind_kph + " km/h";
@@ -196,21 +209,26 @@
         elUVDesc.textContent = uvDescription(cur.uv);
         elVisibility.textContent = cur.vis_km + " km";
 
+        // Sun
         elSunrise.textContent = astro.sunrise;
         elSunset.textContent  = astro.sunset;
         updateSunArc(astro.sunrise, astro.sunset);
 
+        // Warnings
         setHazardWarning(data.alerts, cur.last_updated_epoch);
+
+        // Date
         elDateTime.textContent = new Date().toString();
     }
 
-    // ── Render hourly forecast ───────────────────────────────
+    // ── Render hourly forecast ──────────────────────────────────────
     function renderHourly(data) {
         const hours = [];
         const nowHour = new Date().getHours();
         const today = data.forecast.forecastday[0].hour;
         const tomorrow = data.forecast.forecastday[1] ? data.forecast.forecastday[1].hour : [];
 
+        // Collect next 24 hours
         for (const h of today) {
             const hh = new Date(h.time).getHours();
             if (hh >= nowHour) hours.push(h);
@@ -224,16 +242,17 @@
             const hr = new Date(h.time).getHours();
             const label = i === 0 ? "Now" : (hr === 0 ? "12 AM" : hr <= 12 ? hr + (hr === 12 ? " PM" : " AM") : (hr - 12) + " PM");
             const temp = useCelsius ? round1(h.temp_c) : round1(cToF(h.temp_c));
+            const unit = useCelsius ? "°" : "°";
             return `
                 <div class="hourly-item${i === 0 ? " now" : ""}">
                     <div class="hourly-time">${label}</div>
                     <img class="hourly-icon" src="https:${h.condition.icon}" alt="${h.condition.text}">
-                    <div class="hourly-temp">${temp}°</div>
+                    <div class="hourly-temp">${temp}${unit}</div>
                 </div>`;
         }).join("");
     }
 
-    // ── Render 5-day forecast ────────────────────────────────
+    // ── Render 5-day forecast ───────────────────────────────────────
     function renderDaily(data) {
         const days = data.forecast.forecastday;
         const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -245,19 +264,21 @@
             const dateLabel = monthNames[dt.getMonth()] + " " + dt.getDate();
             const hi = useCelsius ? round1(d.day.maxtemp_c) : round1(cToF(d.day.maxtemp_c));
             const lo = useCelsius ? round1(d.day.mintemp_c) : round1(cToF(d.day.mintemp_c));
+            const unit = useCelsius ? "°" : "°";
             return `
                 <div class="daily-item">
                     <div class="daily-day">${dayLabel} <span class="daily-date">${dateLabel}</span></div>
                     <img class="daily-icon" src="https:${d.day.condition.icon}" alt="${d.day.condition.text}">
                     <div class="daily-condition">${d.day.condition.text}</div>
                     <div class="daily-temps">
-                        <span class="daily-high">${hi}°</span>
-                        <span class="daily-low">${lo}°</span>
+                        <span class="daily-high">${hi}${unit}</span>
+                        <span class="daily-low">${lo}${unit}</span>
                     </div>
                 </div>`;
         }).join("");
     }
 
+    // ── Render all ────────────────────────────────────────────────
     function renderAll(data) {
         currentData = data;
         renderCurrent(data);
@@ -265,19 +286,19 @@
         renderDaily(data);
     }
 
-    // ── Set location name ───────────────────────────────────
+    // ── Set location name ─────────────────────────────────────────
     async function setLocationName(lat, lon, sunrise, sunset) {
         try {
             const geo = await apiFetch(GEO_BASE + "?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=en");
             const tag = isDayTime(sunrise, sunset) ? " (Day)" : " (Night)";
             const sub = geo.principalSubdivision;
             elLocation.textContent = geo.city + ", " + (sub || geo.countryName) + tag;
-        } catch {
+        } catch (e) {
             elLocation.textContent = lat.toFixed(2) + ", " + lon.toFixed(2);
         }
     }
 
-    // ── Main fetch ───────────────────────────────────────────
+    // ── Main fetch ──────────────────────────────────────────────
     async function loadWeather(lat, lon) {
         try {
             const url = WEATHER_BASE + "/forecast.json?key=" + API_KEY + "&q=" + lat + "," + lon + "&days=5&aqi=no&alerts=yes";
@@ -293,7 +314,7 @@
         }
     }
 
-    // ── Load by city query ───────────────────────────────────
+    // ── Load by city query ────────────────────────────────────────
     async function loadWeatherByQuery(query) {
         loadingOverlay.classList.remove("hidden");
         mainContent.style.display = "none";
@@ -304,6 +325,7 @@
 
             renderAll(data);
 
+            // Set location from API response
             const astro = data.forecast.forecastday[0].astro;
             const tag = isDayTime(astro.sunrise, astro.sunset) ? " (Day)" : " (Night)";
             const region = loc.region || loc.country;
@@ -316,7 +338,7 @@
         }
     }
 
-    // ── Search autocomplete ──────────────────────────────────
+    // ── Search autocomplete ───────────────────────────────────────
     async function searchCities(query) {
         if (query.length < 2) {
             elSearchResults.classList.remove("visible");
@@ -334,19 +356,30 @@
                 return '<div class="search-result-item" data-query="' + r.lat + ',' + r.lon + '">' + label + '</div>';
             }).join("");
             elSearchResults.classList.add("visible");
-        } catch {
+        } catch (e) {
             elSearchResults.classList.remove("visible");
         }
     }
 
-    // ── Event listeners ─────────────────────────────────────
+    // ── Event listeners ─────────────────────────────────────────
 
-    elUnitToggle.addEventListener("click", () => {
+    // Unit toggle (shared logic)
+    function toggleUnit() {
         useCelsius = !useCelsius;
         elUnitToggle.textContent = useCelsius ? "°C" : "°F";
         if (currentData) renderAll(currentData);
-    });
+    }
 
+    // Toggle via button
+    elUnitToggle.addEventListener("click", toggleUnit);
+
+    // Toggle via clicking on the temperature display (hero card)
+    const elHeroTemp = $(".hero-temp");
+    if (elHeroTemp) elHeroTemp.addEventListener("click", toggleUnit);
+    const elFeelsLike = $(".feels-like-text");
+    if (elFeelsLike) elFeelsLike.addEventListener("click", toggleUnit);
+
+    // Search input with debounce
     elSearchInput.addEventListener("input", (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => searchCities(e.target.value.trim()), 300);
@@ -363,6 +396,7 @@
         }
     });
 
+    // Search result click
     elSearchResults.addEventListener("click", (e) => {
         const item = e.target.closest(".search-result-item");
         if (!item) return;
@@ -371,23 +405,26 @@
         loadWeatherByQuery(item.dataset.query);
     });
 
+    // Close search results on outside click
     document.addEventListener("click", (e) => {
         if (!e.target.closest(".search-container")) {
             elSearchResults.classList.remove("visible");
         }
     });
 
-    // ── Init ───────────────────────────────────────────────
+    // ── Init ────────────────────────────────────────────────────
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (pos) => loadWeather(pos.coords.latitude, pos.coords.longitude),
             (err) => {
                 console.warn("Geolocation denied:", err.message);
+                // Fallback to Richmond Hill, Ontario
                 loadWeather(43.8828, -79.4403);
             },
             { timeout: 10000 }
         );
     } else {
+        // No geolocation support — fallback
         loadWeather(43.8828, -79.4403);
     }
 
